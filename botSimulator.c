@@ -25,7 +25,9 @@ typedef struct ENTITY{
 }ENTITY;
 
 typedef struct ROBOTDAT{
+	int movement;
 	float battery;
+	float rotation;
 }ROBOTDAT;
 
 ENTITY robot;
@@ -58,7 +60,7 @@ char * loadImage(const char * file){
 	return returndata;
 }
 
-void drawSquare(int x, int y, int size,RGB col){
+inline void drawSquare(int x, int y, int size,RGB col){
 	for(int i = x;i < x + size;i++){
 		for(int i2 = y;i2 < y + size;i2++){
 			background[i][i2][0] = col.r;
