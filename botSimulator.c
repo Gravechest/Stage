@@ -4,9 +4,14 @@
 #include <GL/gl.h>
 #define resX 720
 #define resY 1080
+#define PI 3.14159265359
+
+const char * commands[2] = {"ROT","MOV"};
+const char * rot = "ROT";
+const char * parameters[4] = {"left","right","forward","backward"};
+
 char texture[resX][resY][3];
 char background[resX][resY][3];
-
 typedef struct RGB {char r;char g;char b;} RGB;
 typedef struct VEC2 {float x;float y;}VEC2;
 
@@ -30,6 +35,15 @@ typedef struct ROBOTDAT{
 	float rotation;
 }ROBOTDAT;
 
+typedef struct SCRIPT{
+	int dataSz;
+	char * data;
+	int scriptPos;
+	int comDuration;
+	int comType;
+}SCRIPT;
+
+SCRIPT botScript;
 ENTITY robot;
 ROBOTDAT robotdat = {100};
 ENTITY item;
@@ -70,8 +84,21 @@ inline void drawSquare(int x, int y, int size,RGB col){
 	}
 }
 
+void drawCircle(int x,int y,int size,RGB col){
+	for(int i = x;i < x + size;i++){
+		for(int i2 = y;i2 < y + size;i2++){
+			VEC2 norm = {i - x - size / 2,i2 - y - size / 2};
+			if(sqrtf(norm.x * norm.x + norm.y * norm.y) < size / 2){
+				texture[i][i2][0] = col.r;
+				texture[i][i2][1] = col.g;
+				texture[i][i2][2] = col.b;
+			}
+		}
+	}
+}
+
 void fontDrawing(int x,int y,int offset,int size){
-	font += offset + 5320;
+	font += offset + 5324;
 	for(int i = 0;i < size * 5;i+=size){
 		for(int i2 = 0;i2 < size * 5;i2+=size){
 			RGB color = {font[2],font[1],font[0]};
@@ -80,15 +107,24 @@ void fontDrawing(int x,int y,int offset,int size){
 		}
 		font+=180;
 	}
-	font -= offset + 6320;
+	font -= offset + 6324;
 }
 
 void drawWord(const char * word,int x,int y,int size){
 	for(int i = 0;i < strlen(word);i++){
 		int offset = 3800;
 		int car = 0;
-		if(word[i] > 0x60){
+		if(word[i] > 0x60 && word[i] < 0x7b){
 			car = word[i] - 0x61;
+		}
+		else if(word[i] > 0x40 && word[i] < 0x5b){
+			car = word[i] - 0x41;
+		}
+		else if(word[i] > 0x2f && word[i] < 0x3a){
+			car = word[i] - 0x16;
+		}
+		else{
+			continue;
 		}
 		offset -= car / 10 * 1200;
 		offset += car % 10 * 20;
@@ -100,7 +136,7 @@ void setTexture(TEXTURE text,ENTITY *ent){
 	for(int i = 0;i < text.size;i++){
 		for(int i2 = 0;i2 < text.size;i2++){
 			VEC2 norm = {i - text.size / 2,i2 - text.size / 2};
-			float dist = sqrt(norm.x * norm.x + norm.y * norm.y);
+			float dist = sqrtf(norm.x * norm.x + norm.y * norm.y);
 			for(int i3 = 0;text.color[i3];i3++){
 				if(text.rSize[i3] > dist){
 					ent->texture[i][i2][0] = text.color[i3] << 5;
@@ -130,6 +166,19 @@ void renderObj(ENTITY *bot){
 			texture[i][i2][2] = bot->texture[i - (int)bot->x][i2 - (int)bot->y][2];
 		}
 	}
+	drawCircle(robot.x + 16 + cos(robotdat.rotation) * 7.5,robot.y + 16 + sin(robotdat.rotation) * 7.5,10,colGreen);
+}
+
+char * loadScript(){
+	FILE * tempscript = fopen("script.txt","rb+");
+	fseek(tempscript,0,SEEK_END);
+	int size = ftell(tempscript);
+	botScript.dataSz = size;
+	fseek(tempscript,0,SEEK_SET);
+	char * scriptdata = malloc(size);
+	fread(scriptdata,1,size,tempscript);
+	fclose(tempscript);
+	return scriptdata;
 }
 
 void WINAPI Quarter1(){
@@ -154,16 +203,29 @@ void WINAPI Quarter1(){
 	red.rSize[2] = 5;
 	setTexture(red,&robot);
 	font = loadImage("font.bmp");
-	drawWord("battery",15,780,2);
 	int itt = 0;
+	botScript.data = loadScript();
+	drawWord("battery",15,780,2);
 	for(;;){
+		if(!botScript.comDuration){
+			for(int loop = 0;!loop;){
+				for(int i = 0;i < 2;i++){
+					if(!memcmp(botScript.data,commands[i],3)){
+						switch(i){
+							
+						}
+					}
+				}
+			}
+		}
+		robotdat.rotation += 0.01;
 		drawRect(0,740,robotdat.battery,30,colGreen);
 		renderObj(&robot);
 		robot.x += robot.velx;
 		robot.y += robot.vely;
 		glDrawPixels(resY,resX,GL_RGB,GL_UNSIGNED_BYTE,&texture);
-		memcpy(texture,background,sizeof(texture));
 		SwapBuffers(wdcontext);  
+		memcpy(texture,background,sizeof(texture));;
 	}
 }
 
@@ -185,7 +247,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	WNDCLASSEX wc = { sizeof(WNDCLASSEX),0,WndProc,0,0,hInstance,0,0,0,0,"class",0 };
 	RegisterClassEx(&wc);
 	hwnd = CreateWindowEx(0, "class", "raycasting", WS_VISIBLE | WS_OVERLAPPEDWINDOW,
-		400, 400, resY, resX, NULL, NULL, hInstance, NULL);
+		400, 400, resY, resX + 20, NULL, NULL, hInstance, NULL);
 	wdcontext = GetDC(hwnd);
 	CreateThread(0,0,Quarter1,0,0,0);
 	for(;;){
