@@ -30,15 +30,14 @@ typedef struct ENTITY{
 }ENTITY;
 
 typedef struct ROBOTDAT{
-	int movement;
 	float battery;
 	float rotation;
-}ROBOTDAT;
+}ROBOTDAT; 
 
 typedef struct SCRIPT{
 	int dataSz;
 	char * data;
-	int scriptPos;
+	char * fileEnd;
 	int comDuration;
 	int comType;
 }SCRIPT;
@@ -59,6 +58,30 @@ PIXELFORMATDESCRIPTOR pfd = {sizeof(PIXELFORMATDESCRIPTOR), 1,
 HWND hwnd;
 MSG Msg;
 HDC wdcontext;
+
+int numberLng(char * val){
+	for(int i = 0;;i++){
+		if(val[i] < 0x30 || val[i] > 0x39){
+			return i;
+		}
+	}
+}
+
+int exp10(int val,int times){
+	for(int i = 1;i < times;i++){
+		val *= 10;
+	}
+	return val;
+}
+
+int asciiToInt(char * val){
+	int size = numberLng(val);
+	int result = 0;
+	for(int i = 0;i < size;i++){
+		result += exp10(val[i] - 0x30,size - i);
+	}
+	return result;
+}
 
 char * loadImage(const char * file){
 	FILE * imageF = fopen(file,"rb+");
@@ -169,16 +192,17 @@ void renderObj(ENTITY *bot){
 	drawCircle(robot.x + 16 + cos(robotdat.rotation) * 7.5,robot.y + 16 + sin(robotdat.rotation) * 7.5,10,colGreen);
 }
 
-char * loadScript(){
+void * loadScript(SCRIPT *script){
 	FILE * tempscript = fopen("script.txt","rb+");
 	fseek(tempscript,0,SEEK_END);
 	int size = ftell(tempscript);
-	botScript.dataSz = size;
 	fseek(tempscript,0,SEEK_SET);
-	char * scriptdata = malloc(size);
-	fread(scriptdata,1,size,tempscript);
+	script->data = calloc(size + 5,1);
+	fread(script->data,1,size,tempscript);
+	script->data += size;
+	script->fileEnd = script->data;
+	script->data -= size;
 	fclose(tempscript);
-	return scriptdata;
 }
 
 void WINAPI Quarter1(){
@@ -204,21 +228,47 @@ void WINAPI Quarter1(){
 	setTexture(red,&robot);
 	font = loadImage("font.bmp");
 	int itt = 0;
-	botScript.data = loadScript();
+	loadScript(&botScript);
 	drawWord("battery",15,780,2);
 	for(;;){
 		if(!botScript.comDuration){
 			for(int loop = 0;!loop;){
 				for(int i = 0;i < 2;i++){
-					if(!memcmp(botScript.data,commands[i],3)){
-						switch(i){
-							
+					if(!memcmp(botScript.data,commands[i],strlen(commands[i]))){
+						while(botScript.data[0] < 0x30 || botScript.data[0] > 0x39){
+							if(botScript.data == botScript.fileEnd){
+								botScript.comType = 256;
+								botScript.comDuration = 1;
+							}
+							botScript.data++;
 						}
+						botScript.comType = i;
+						botScript.comDuration = asciiToInt(botScript.data);
+						loop = 1;
+						break;
 					}
+				}
+				if(botScript.data == botScript.fileEnd){
+					botScript.comType = 256;
+					botScript.comDuration = 1;
+				}
+				botScript.data++;
+			}
+		}
+		else{
+			if(~botScript.comType & 256){
+				botScript.comDuration -= 1;
+				switch(botScript.comType & 1){
+				case 0:
+				 	robotdat.rotation += 0.01;
+					break;
+				case 1:
+					robot.x += cos(robotdat.rotation);
+					robot.y += sin(robotdat.rotation);
+					break;
 				}
 			}
 		}
-		robotdat.rotation += 0.01;
 		drawRect(0,740,robotdat.battery,30,colGreen);
 		renderObj(&robot);
 		robot.x += robot.velx;
@@ -260,3 +310,4 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	}
 	return Msg.wParam;
 }
+
