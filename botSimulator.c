@@ -2,18 +2,24 @@
 #include <math.h>
 #include <stdio.h>
 #include <GL/gl.h>
+
 #define resX 720
 #define resY 1080
 #define PI 3.14159265359
 
-const char * commands[2] = {"ROT","MOV"};
+const char * commands[] = {"ROT","MOV","END","SLP"};
 const char * rot = "ROT";
-const char * parameters[4] = {"left","right","forward","backward"};
+const char * parameters[4] = {"LEFT","RIGHT","FORWARD","BACKWARD"};
 
 char texture[resX][resY][3];
 char background[resX][resY][3];
 typedef struct RGB {char r;char g;char b;} RGB;
 typedef struct VEC2 {float x;float y;}VEC2;
+
+typedef struct BATTERY{
+	float life;
+	float temp;
+}BATTERY;
 
 typedef struct TEXTURE{
 	char size;
@@ -30,7 +36,7 @@ typedef struct ENTITY{
 }ENTITY;
 
 typedef struct ROBOTDAT{
-	float battery;
+	BATTERY battery;
 	float rotation;
 }ROBOTDAT; 
 
@@ -44,10 +50,13 @@ typedef struct SCRIPT{
 
 SCRIPT botScript;
 ENTITY robot;
-ROBOTDAT robotdat = {100};
+ROBOTDAT robotdat = {100,20};
 ENTITY item;
 
 RGB colGreen = {34,180,3};
+RGB colBrown = {125,67,45};
+RGB colDarkBrown = {75,57,35};
+
 char * font;
 
 PIXELFORMATDESCRIPTOR pfd = {sizeof(PIXELFORMATDESCRIPTOR), 1,
@@ -83,6 +92,21 @@ int asciiToInt(char * val){
 	return result;
 }
 
+char * floatToAscii(float val){
+	int intval = (int)val;
+	char * result = calloc(4,1);
+	int size = -1;
+	for(;intval;size++){
+		intval /= 10;
+	}
+	intval = (int)val;
+	for(;intval;size--){
+		result[size] = intval % 10 + 0x30;
+		intval /= 10;
+	}
+	return result;
+}
+
 char * loadImage(const char * file){
 	FILE * imageF = fopen(file,"rb+");
 	fseek(imageF,0,SEEK_END);
@@ -107,6 +131,16 @@ inline void drawSquare(int x, int y, int size,RGB col){
 	}
 }
 
+inline void drawSquareF(int x, int y, int size,RGB col){
+	for(int i = x;i < x + size;i++){
+		for(int i2 = y;i2 < y + size;i2++){
+			texture[i][i2][0] = col.r;
+			texture[i][i2][1] = col.g;
+			texture[i][i2][2] = col.b;
+		}
+	}
+}
+
 void drawCircle(int x,int y,int size,RGB col){
 	for(int i = x;i < x + size;i++){
 		for(int i2 = y;i2 < y + size;i2++){
@@ -120,12 +154,17 @@ void drawCircle(int x,int y,int size,RGB col){
 	}
 }
 
-void fontDrawing(int x,int y,int offset,int size){
+void fontDrawing(int x,int y,int offset,int size,char flags){
 	font += offset + 5324;
 	for(int i = 0;i < size * 5;i+=size){
 		for(int i2 = 0;i2 < size * 5;i2+=size){
 			RGB color = {font[2],font[1],font[0]};
-			drawSquare(x + i,y + i2,size,color);
+			if(flags & 1){
+				drawSquareF(x + i,y + i2,size,color);
+			}
+			else{
+				drawSquare(x + i,y + i2,size,color);
+			}
 			font+=4;
 		}
 		font+=180;
@@ -133,7 +172,7 @@ void fontDrawing(int x,int y,int offset,int size){
 	font -= offset + 6324;
 }
 
-void drawWord(const char * word,int x,int y,int size){
+void drawWord(const char * word,int x,int y,int size,char flags){
 	for(int i = 0;i < strlen(word);i++){
 		int offset = 3800;
 		int car = 0;
@@ -151,7 +190,7 @@ void drawWord(const char * word,int x,int y,int size){
 		}
 		offset -= car / 10 * 1200;
 		offset += car % 10 * 20;
-		fontDrawing(x,y + i * size * 5,offset,size);
+		fontDrawing(x,y + i * size * 5,offset,size,flags);
 	}
 }
 
@@ -172,6 +211,16 @@ void setTexture(TEXTURE text,ENTITY *ent){
 }
 
 void drawRect(int x,int y,int sx,int sy,RGB col){
+	for(int i = x;i < x + sx;i++){
+		for(int i2 = y;i2 < y + sy;i2++){
+			background[i][i2][0] = col.r;
+			background[i][i2][1] = col.g;
+			background[i][i2][2] = col.b;
+		}
+	}
+}
+
+void drawRectF(int x,int y,int sx,int sy,RGB col){
 	for(int i = x;i < x + sx;i++){
 		for(int i2 = y;i2 < y + sy;i2++){
 			texture[i][i2][0] = col.r;
@@ -197,7 +246,7 @@ void * loadScript(SCRIPT *script){
 	fseek(tempscript,0,SEEK_END);
 	int size = ftell(tempscript);
 	fseek(tempscript,0,SEEK_SET);
-	script->data = calloc(size + 5,1);
+	script->data = calloc(size,1);
 	fread(script->data,1,size,tempscript);
 	script->data += size;
 	script->fileEnd = script->data;
@@ -208,13 +257,7 @@ void * loadScript(SCRIPT *script){
 void WINAPI Quarter1(){
 	SetPixelFormat(wdcontext, ChoosePixelFormat(wdcontext, &pfd), &pfd);
 	wglMakeCurrent(wdcontext, wglCreateContext(wdcontext));
-	for(int i = 0;i < resX;i++){
-		for(int i2 = 720;i2 < 730;i2++){
-			background[i][i2][0] = 125;
-			background[i][i2][1] = 67;
-			background[i][i2][2] = 45;
-		}
-	}
+	drawRect(0,720,resX,10,colDarkBrown);
 	TEXTURE red;
 	red.size = 40;
 	red.color = calloc(4,1);
@@ -229,50 +272,57 @@ void WINAPI Quarter1(){
 	font = loadImage("font.bmp");
 	int itt = 0;
 	loadScript(&botScript);
-	drawWord("battery",15,780,2);
+	drawRect(0,825,100,5,colBrown);
+	drawRect(100,730,5,350,colBrown);
+	drawRect(0,760,100,5,colBrown);
+	drawWord("battery",120,738,4,0);
+	drawWord("temp",65,775,2,0);
 	for(;;){
 		if(!botScript.comDuration){
 			for(int loop = 0;!loop;){
-				for(int i = 0;i < 2;i++){
+				for(int i = 0;i < 4;i++){
 					if(!memcmp(botScript.data,commands[i],strlen(commands[i]))){
-						while(botScript.data[0] < 0x30 || botScript.data[0] > 0x39){
-							if(botScript.data == botScript.fileEnd){
-								botScript.comType = 256;
-								botScript.comDuration = 1;
+						if(memcmp(botScript.data,"END",3)){
+							while(botScript.data[0] < 0x30 || botScript.data[0] > 0x39){
+								botScript.data++;
 							}
-							botScript.data++;
+							botScript.comDuration = asciiToInt(botScript.data) * 4;
+						}
+						else{
+							botScript.comDuration = -1;
 						}
 						botScript.comType = i;
-						botScript.comDuration = asciiToInt(botScript.data);
 						loop = 1;
 						break;
 					}
 				}
-				if(botScript.data == botScript.fileEnd){
-					botScript.comType = 256;
-					botScript.comDuration = 1;
+				if(!loop){
+					botScript.data++;
 				}
-				botScript.data++;
 			}
 		}
 		else{
-			if(~botScript.comType & 256){
-				botScript.comDuration -= 1;
-				switch(botScript.comType & 1){
-				case 0:
-				 	robotdat.rotation += 0.01;
-					break;
-				case 1:
-					robot.x += cos(robotdat.rotation);
-					robot.y += sin(robotdat.rotation);
-					break;
-				}
+			botScript.comDuration -= 1;
+			switch(botScript.comType & 3){
+			case 0:
+				robotdat.battery.life -= 0.001;
+				robotdat.battery.temp += 0.01;
+			 	robotdat.rotation += PI / 720;
+				break;
+			case 1:
+				robotdat.battery.life -= 0.002;
+				robotdat.battery.temp += 0.01;
+				robot.x += cos(robotdat.rotation) / 4;
+				robot.y += sin(robotdat.rotation) / 4;
+				break;
 			}
 		}
-		drawRect(0,740,robotdat.battery,30,colGreen);
+		drawWord(floatToAscii(robotdat.battery.temp),25,775,4,0);
+		drawRectF(0,730,robotdat.battery.life,30,colGreen);
 		renderObj(&robot);
 		robot.x += robot.velx;
 		robot.y += robot.vely;
+		robotdat.battery.temp -= (robotdat.battery.temp - 20) / 1000; 
 		glDrawPixels(resY,resX,GL_RGB,GL_UNSIGNED_BYTE,&texture);
 		SwapBuffers(wdcontext);  
 		memcpy(texture,background,sizeof(texture));;
@@ -310,4 +360,3 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	}
 	return Msg.wParam;
 }
-
