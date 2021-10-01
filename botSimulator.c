@@ -54,7 +54,6 @@ SCRIPT botScript;
 ENTITY robot;
 ENTITY *staticObject;
 ROBOTDAT robotdat = {100,20};
-TEXTURE obstakelText;
 
 RGB colGreen = {34,180,3};
 RGB colBrown = {125,67,45};
@@ -299,6 +298,7 @@ void WINAPI Quarter1(){
 	SetPixelFormat(wdcontext, ChoosePixelFormat(wdcontext, &pfd), &pfd);
 	wglMakeCurrent(wdcontext, wglCreateContext(wdcontext));
 	drawRect(0,720,resX,10,colDarkBrown);
+
 	TEXTURE red = {40,malloc(3),malloc(3)};
 	red.color[0] = 0x61;
 	red.color[1] = 0x04;	
@@ -307,12 +307,15 @@ void WINAPI Quarter1(){
 	red.rSize[1] = 10;
 	red.rSize[2] = 5;
 	setTexture(red,&robot);
+
+	TEXTURE obstakelText = {40,malloc(2),malloc(2)};
 	obstakelText.color = malloc(2);
 	obstakelText.color[0] = 0x74;
 	obstakelText.color[1] = 0x75;
 	obstakelText.rSize = malloc(2);
 	obstakelText.rSize[0] = 28;
 	obstakelText.rSize[1] = 17;
+
 	font = loadImage("font.bmp");
 	loadScript(&botScript);
 	drawRect(0,825,100,5,colBrown);
@@ -342,7 +345,13 @@ void WINAPI Quarter1(){
 			}
 		}
 	}
+	for(int i = 0;i < staticObjectAmm;i++){
+		setTexture(obstakelText,&staticObject[i]);	
+	}
 	for(;;){
+		for(int i = 0;i < staticObjectAmm;i++){
+			renderObj(&staticObject[i]);
+		}
 		if(!botScript.comDuration){
 			for(int loop = 0;!loop;){
 				for(int i = 0;i < 4;i++){
