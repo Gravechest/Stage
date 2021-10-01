@@ -10,6 +10,8 @@
 const char * commands[] = {"ROT","MOV","END","SLP"};
 const char * rot = "ROT";
 const char * parameters[4] = {"LEFT","RIGHT","FORWARD","BACKWARD"};
+const char * objectNames[] = {"CRATE"};
+int staticObjectAmm;
 
 char texture[resX][resY][3];
 char background[resX][resY][3];
@@ -29,14 +31,14 @@ typedef struct TEXTURE{
 
 typedef struct ENTITY{
 	char texture[40][40][3];
-	float velx;
-	float vely;
 	float x;
 	float y;
 }ENTITY;
 
 typedef struct ROBOTDAT{
 	BATTERY battery;
+	float velx;
+	float vely;
 	float rotation;
 }ROBOTDAT; 
 
@@ -50,14 +52,16 @@ typedef struct SCRIPT{
 
 SCRIPT botScript;
 ENTITY robot;
+ENTITY *staticObject;
 ROBOTDAT robotdat = {100,20};
-ENTITY item;
+TEXTURE obstakelText;
 
 RGB colGreen = {34,180,3};
 RGB colBrown = {125,67,45};
 RGB colDarkBrown = {75,57,35};
 
 char * font;
+char * objects;
 
 PIXELFORMATDESCRIPTOR pfd = {sizeof(PIXELFORMATDESCRIPTOR), 1,
 	PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,PFD_TYPE_RGBA,
@@ -119,6 +123,29 @@ char * loadImage(const char * file){
 	fread(returndata,1,size - ftell(imageF),imageF);
 	free(data);
 	return returndata;
+}
+
+char * loadFile(const char * file){
+	FILE * FILE = fopen(file,"rb+");
+	fseek(FILE,0,SEEK_END);
+	int size = ftell(FILE);
+	fseek(FILE,0,SEEK_SET);
+	char * returndata = malloc(size);
+	fread(returndata,1,size,FILE);
+	return returndata;
+}
+
+void loadScript(SCRIPT *script){
+	FILE * tempscript = fopen("script.txt","rb+");
+	fseek(tempscript,0,SEEK_END);
+	int size = ftell(tempscript);
+	fseek(tempscript,0,SEEK_SET);
+	script->data = calloc(size,1);
+	fread(script->data,1,size,tempscript);
+	script->data += size;
+	script->fileEnd = script->data;
+	script->data -= size;
+	fclose(tempscript);
 }
 
 inline void drawSquare(int x, int y, int size,RGB col){
@@ -241,51 +268,87 @@ void renderObj(ENTITY *bot){
 	drawCircle(robot.x + 16 + cos(robotdat.rotation) * 7.5,robot.y + 16 + sin(robotdat.rotation) * 7.5,10,colGreen);
 }
 
-void * loadScript(SCRIPT *script){
-	FILE * tempscript = fopen("script.txt","rb+");
-	fseek(tempscript,0,SEEK_END);
-	int size = ftell(tempscript);
-	fseek(tempscript,0,SEEK_SET);
-	script->data = calloc(size,1);
-	fread(script->data,1,size,tempscript);
-	script->data += size;
-	script->fileEnd = script->data;
-	script->data -= size;
-	fclose(tempscript);
+void renderRotObj(ENTITY *bot, float rot){
+	for(int i = 0;i < 40;i++){
+		for(int i2 = 0;i2 < 40;i2++){
+			VEC2 norm = {i - 20,i2 - 20};
+			int px = cosf(rot) * norm.x - sinf(rot) * norm.y + 20;
+			int py = sinf(rot) * norm.x + cosf(rot) * norm.y + 20;
+			texture[(int)bot->x+px][(int)bot->y+py][0] = bot->texture[i][i2][0];
+			texture[(int)bot->x+px][(int)bot->y+py][1] = bot->texture[i][i2][1];
+			texture[(int)bot->x+px][(int)bot->y+py][2] = bot->texture[i][i2][2];
+		}
+	}
+	drawCircle(robot.x + 16 + cos(robotdat.rotation) * 7.5,robot.y + 16 + sin(robotdat.rotation) * 7.5,10,colGreen);
+}
+
+char * jumpToNumber(char * val){
+	while(val[0] > 0x29 && val[0] < 0x40){
+		val++;
+	}
+	while(val[0] < 0x30 || val[0] > 0x39){
+		val++;
+	}
+	return val;
 }
 
 void WINAPI Quarter1(){
+	objects = loadFile("objects.txt");
+	robot.x = 100;
+	robot.y = 100;
 	SetPixelFormat(wdcontext, ChoosePixelFormat(wdcontext, &pfd), &pfd);
 	wglMakeCurrent(wdcontext, wglCreateContext(wdcontext));
 	drawRect(0,720,resX,10,colDarkBrown);
-	TEXTURE red;
-	red.size = 40;
-	red.color = calloc(4,1);
+	TEXTURE red = {40,malloc(3),malloc(3)};
 	red.color[0] = 0x61;
-	red.color[1] = 0x04;
+	red.color[1] = 0x04;	
 	red.color[2] = 0x07;
-	red.rSize = malloc(3);
-	red.rSize[0] = 20;
+	red.rSize[0] = 26;
 	red.rSize[1] = 10;
 	red.rSize[2] = 5;
 	setTexture(red,&robot);
+	obstakelText.color = malloc(2);
+	obstakelText.color[0] = 0x74;
+	obstakelText.color[1] = 0x75;
+	obstakelText.rSize = malloc(2);
+	obstakelText.rSize[0] = 28;
+	obstakelText.rSize[1] = 17;
 	font = loadImage("font.bmp");
-	int itt = 0;
 	loadScript(&botScript);
 	drawRect(0,825,100,5,colBrown);
 	drawRect(100,730,5,350,colBrown);
 	drawRect(0,760,100,5,colBrown);
 	drawWord("battery",120,738,4,0);
 	drawWord("temp",65,775,2,0);
+	for(;memcmp(objects,"END",3);objects++){
+		for(int i = 0;i < 1;i++){
+			if(!memcmp(objects,objectNames[i],5)){
+				if(!staticObjectAmm){
+					staticObjectAmm++;
+					staticObject = malloc(sizeof(ENTITY));
+				}
+				else{
+					staticObjectAmm++;
+					staticObject = realloc(staticObject,sizeof(ENTITY) * staticObjectAmm);
+				}
+				switch(i){
+				case 0:
+					objects = jumpToNumber(objects);
+					staticObject[staticObjectAmm-1].x = asciiToInt(objects);
+					objects = jumpToNumber(objects);
+					staticObject[staticObjectAmm-1].y = asciiToInt(objects);
+					break;
+				}
+			}
+		}
+	}
 	for(;;){
 		if(!botScript.comDuration){
 			for(int loop = 0;!loop;){
 				for(int i = 0;i < 4;i++){
 					if(!memcmp(botScript.data,commands[i],strlen(commands[i]))){
 						if(memcmp(botScript.data,"END",3)){
-							while(botScript.data[0] < 0x30 || botScript.data[0] > 0x39){
-								botScript.data++;
-							}
+							botScript.data = jumpToNumber(botScript.data);
 							botScript.comDuration = asciiToInt(botScript.data) * 4;
 						}
 						else{
@@ -301,27 +364,25 @@ void WINAPI Quarter1(){
 				}
 			}
 		}
-		else{
-			botScript.comDuration -= 1;
-			switch(botScript.comType & 3){
-			case 0:
-				robotdat.battery.life -= 0.001;
-				robotdat.battery.temp += 0.01;
-			 	robotdat.rotation += PI / 720;
-				break;
-			case 1:
-				robotdat.battery.life -= 0.002;
-				robotdat.battery.temp += 0.01;
-				robot.x += cos(robotdat.rotation) / 4;
-				robot.y += sin(robotdat.rotation) / 4;
-				break;
-			}
+		botScript.comDuration -= 1;
+		switch(botScript.comType & 3){
+		case 0:
+			robotdat.battery.life -= 0.001;
+			robotdat.battery.temp += 0.01;
+		 	robotdat.rotation += PI / 720;
+			break;
+		case 1:
+			robotdat.battery.life -= 0.002;
+			robotdat.battery.temp += 0.01;
+			robot.x += cos(robotdat.rotation) / 4;
+			robot.y += sin(robotdat.rotation) / 4;
+			break;
 		}
+		renderRotObj(&robot,robotdat.rotation);
 		drawWord(floatToAscii(robotdat.battery.temp),25,775,4,0);
 		drawRectF(0,730,robotdat.battery.life,30,colGreen);
-		renderObj(&robot);
-		robot.x += robot.velx;
-		robot.y += robot.vely;
+		robot.x += robotdat.velx;
+		robot.y += robotdat.vely;
 		robotdat.battery.temp -= (robotdat.battery.temp - 20) / 1000; 
 		glDrawPixels(resY,resX,GL_RGB,GL_UNSIGNED_BYTE,&texture);
 		SwapBuffers(wdcontext);  
