@@ -11,7 +11,7 @@ const char * commands[] = {"ROT","MOV","END","SLP"};
 const char * rot = "ROT";
 const char * parameters[4] = {"LEFT","RIGHT","FORWARD","BACKWARD"};
 const char * objectNames[] = {"CRATE"};
-int staticObjectAmm;
+
 
 char texture[resX][resY][3];
 char background[resX][resY][3];
@@ -52,7 +52,10 @@ typedef struct SCRIPT{
 
 SCRIPT botScript;
 ENTITY robot;
+
+int staticObjectAmm;
 ENTITY *staticObject;
+
 ROBOTDAT robotdat = {100,20};
 
 RGB colGreen = {34,180,3};
@@ -291,10 +294,38 @@ char * jumpToNumber(char * val){
 	return val;
 }
 
+char hitboxCheck(int x1,int x2,int y1,int y2){
+	float dist = 0;
+	dist += fabsf(x1 - x2) + fabsf(y1 - y2);
+	dist += fabsf(x1 + 40 - x2) + fabsf(y1 - y2);
+	dist += fabsf(x1 - x2) + fabsf(y1 + 40 - y2);
+	dist += fabsf(x1 + 40 - x2) + fabsf(y1 + 40 - y2);
+	if(dist == 160){
+		return 1;
+	}
+	return 0;
+}
+
+char globalHitboxCheck(int x1,int x2,int y1,int y2){
+	if(hitboxCheck(x1,x2,y1,y2)){
+		return 1;
+	}
+	else if(hitboxCheck(x1 - 40,x2,y1,y2)){
+		return 1;
+	}
+	else if(hitboxCheck(x1,x2,y1 - 40,y2)){
+		return 1;
+	}
+	else if(hitboxCheck(x1 - 40,x2,y1 - 40,y2)){
+		return 1;
+	}
+	return 0;
+}
+
 void WINAPI Quarter1(){
 	objects = loadFile("objects.txt");
-	robot.x = 100;
-	robot.y = 100;
+	robot.x = 0;
+	robot.y = 0;
 	SetPixelFormat(wdcontext, ChoosePixelFormat(wdcontext, &pfd), &pfd);
 	wglMakeCurrent(wdcontext, wglCreateContext(wdcontext));
 	drawRect(0,720,resX,10,colDarkBrown);
@@ -386,6 +417,11 @@ void WINAPI Quarter1(){
 			robot.x += cos(robotdat.rotation) / 4;
 			robot.y += sin(robotdat.rotation) / 4;
 			break;
+		}
+		for(int i = 0;i < staticObjectAmm;i++){
+			if(globalHitboxCheck(robot.x,staticObject[i].x,robot.y,staticObject[i].y)){
+				botScript.comDuration = 0;
+			}	
 		}
 		renderRotObj(&robot,robotdat.rotation);
 		drawWord(floatToAscii(robotdat.battery.temp),25,775,4,0);
