@@ -10,7 +10,7 @@
 const char * commands[] = {"ROT","MOV","END","SLP"};
 const char * rot = "ROT";
 const char * parameters[4] = {"LEFT","RIGHT","FORWARD","BACKWARD"};
-const char * objectNames[] = {"CRATE"};
+const char * objectNames[] = {"CRATE","CHARGE"};
 
 
 char texture[resX][resY][3];
@@ -21,6 +21,7 @@ typedef struct VEC2 {float x;float y;}VEC2;
 typedef struct BATTERY{
 	float life;
 	float temp;
+	int data;
 }BATTERY;
 
 typedef struct TEXTURE{
@@ -34,6 +35,10 @@ typedef struct ENTITY{
 	float x;
 	float y;
 }ENTITY;
+
+typedef struct OBJECTDAT{
+	char data;
+}OBJECTDATA;
 
 typedef struct ROBOTDAT{
 	BATTERY battery;
@@ -55,12 +60,14 @@ ENTITY robot;
 
 int staticObjectAmm;
 ENTITY *staticObject;
+OBJECTDATA *objectdat;
 
 ROBOTDAT robotdat = {100,20};
 
 RGB colGreen = {34,180,3};
 RGB colBrown = {125,67,45};
 RGB colDarkBrown = {75,57,35};
+RGB colRed = {234,34,10};
 
 char * font;
 char * objects;
@@ -339,6 +346,14 @@ void WINAPI Quarter1(){
 	red.rSize[2] = 5;
 	setTexture(red,&robot);
 
+	TEXTURE chargeText = {40,malloc(2),malloc(2)};
+	chargeText.color = malloc(2);
+	chargeText.color[0] = 0x74;
+	chargeText.color[1] = 0x54;
+	chargeText.rSize = malloc(2);
+	chargeText.rSize[0] = 28;
+	chargeText.rSize[1] = 17;
+
 	TEXTURE obstakelText = {40,malloc(2),malloc(2)};
 	obstakelText.color = malloc(2);
 	obstakelText.color[0] = 0x74;
@@ -349,37 +364,52 @@ void WINAPI Quarter1(){
 
 	font = loadImage("font.bmp");
 	loadScript(&botScript);
-	drawRect(0,825,100,5,colBrown);
+	drawRect(152,730,5,350,colBrown);
 	drawRect(100,730,5,350,colBrown);
 	drawRect(0,760,100,5,colBrown);
+	drawRect(0,825,100,5,colBrown);
+	drawRect(0,890,100,5,colBrown);
 	drawWord("battery",120,738,4,0);
 	drawWord("temp",65,775,2,0);
+	drawWord("char",65,840,2,0);
 	for(;memcmp(objects,"END",3);objects++){
-		for(int i = 0;i < 1;i++){
+		for(int i = 0;i < 2;i++){
 			if(!memcmp(objects,objectNames[i],5)){
 				if(!staticObjectAmm){
 					staticObjectAmm++;
+					objectdat = malloc(sizeof(OBJECTDATA));
 					staticObject = malloc(sizeof(ENTITY));
 				}
 				else{
 					staticObjectAmm++;
+					objectdat = realloc(objectdat,sizeof(OBJECTDATA) * staticObjectAmm);
 					staticObject = realloc(staticObject,sizeof(ENTITY) * staticObjectAmm);
 				}
-				switch(i){
-				case 0:
-					objects = jumpToNumber(objects);
-					staticObject[staticObjectAmm-1].x = asciiToInt(objects);
-					objects = jumpToNumber(objects);
-					staticObject[staticObjectAmm-1].y = asciiToInt(objects);
-					break;
-				}
+				objects = jumpToNumber(objects);
+				staticObject[staticObjectAmm-1].x = asciiToInt(objects);
+				objects = jumpToNumber(objects);
+				staticObject[staticObjectAmm-1].y = asciiToInt(objects);
+				objectdat[staticObjectAmm-1].data = i;
 			}
 		}
 	}
 	for(int i = 0;i < staticObjectAmm;i++){
-		setTexture(obstakelText,&staticObject[i]);	
+		switch(objectdat[i].data){
+		case 0:
+			setTexture(obstakelText,&staticObject[i]);	
+			break;
+		case 1:
+			setTexture(chargeText,&staticObject[i]);	
+			break;
+		}
 	}
 	for(;;){
+		if(robotdat.battery.data & 1){
+			drawCircle(23,848,23,colGreen);
+		}
+		else{
+			drawCircle(23,848,23,colRed);
+		}
 		for(int i = 0;i < staticObjectAmm;i++){
 			renderObj(&staticObject[i]);
 		}
