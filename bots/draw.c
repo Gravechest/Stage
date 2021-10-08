@@ -1,4 +1,4 @@
-﻿#include <font.h>
+﻿#include <global.h>
 #include <math.h>
 
 void drawSquare(int x, int y, int size,RGB col){
@@ -37,7 +37,7 @@ void drawCircle(int x,int y,int size,RGB col){
 void drawCircleF(int x,int y,int size,RGB col){
 	for(int i = x;i < x + size;i++){
 		for(int i2 = y;i2 < y + size;i2++){
-			VEC2 norm = {i - x - size / 2,i2 - y - size / 2};
+			VEC2 norm = {x - size / 2,y - size / 2};
 			if(sqrtf(norm.x * norm.x + norm.y * norm.y) < size / 2){
 				texture[i][i2][0] = col.r;
 				texture[i][i2][1] = col.g;

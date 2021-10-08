@@ -1,11 +1,11 @@
 ﻿#include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <font.h>
+#include <global.h>
 
 char * font;
 
-void * loadImage(const char * file){
+void loadImage(const char * file){
 	FILE * imageF = fopen(file,"rb+");
 	fseek(imageF,0,SEEK_END);
 	int size = ftell(imageF);
